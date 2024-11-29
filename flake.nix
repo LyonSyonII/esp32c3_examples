@@ -26,7 +26,7 @@
           "cargo"
           "clippy"
           "rustfmt"
-          "rust-analyzer"
+          # "rust-analyzer"
           "rust-src"
           "llvm-tools-preview"
           # Nightly

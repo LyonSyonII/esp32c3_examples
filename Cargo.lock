@@ -56,12 +56,12 @@ checksum = "b048fb63fd8b5923fc5aa7b340d8e156aec7ec02f0c78fa8a6ddc2613f6f71de"
 [[package]]
 name = "bleps"
 version = "0.1.0"
-source = "git+https://github.com/bjoernQ/bleps?rev=a5148d8ae679e021b78f53fd33afb8bb35d0b62e#a5148d8ae679e021b78f53fd33afb8bb35d0b62e"
 dependencies = [
  "bitfield 0.14.0",
  "bleps-dedup",
  "bleps-macros",
  "critical-section",
+ "defmt",
  "embedded-io",
  "embedded-io-async",
  "futures",
@@ -72,7 +72,6 @@ dependencies = [
 [[package]]
 name = "bleps-dedup"
 version = "0.1.0"
-source = "git+https://github.com/bjoernQ/bleps?rev=a5148d8ae679e021b78f53fd33afb8bb35d0b62e#a5148d8ae679e021b78f53fd33afb8bb35d0b62e"
 dependencies = [
  "darling",
  "proc-macro-error",
@@ -84,7 +83,6 @@ dependencies = [
 [[package]]
 name = "bleps-macros"
 version = "0.1.0"
-source = "git+https://github.com/bjoernQ/bleps?rev=a5148d8ae679e021b78f53fd33afb8bb35d0b62e#a5148d8ae679e021b78f53fd33afb8bb35d0b62e"
 dependencies = [
  "litrs 0.2.3",
  "proc-macro2",
