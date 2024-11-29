@@ -5,8 +5,8 @@ use esp_backtrace as _;
 use esp_hal::{delay::Delay, prelude::*};
 use esp_hal::timer::timg::TimerGroup;
 
- use defmt_rtt as _;
- use defmt::info;
+use defmt_rtt as _;
+use defmt::{error, info, warn};
 
 extern crate alloc;
 
@@ -18,17 +18,17 @@ fn main() -> ! {
         config
     });
 
-
+    
     esp_alloc::heap_allocator!(72 * 1024);
 
     let timg0 = TimerGroup::new(peripherals.TIMG0);
     let _init = esp_wifi::init(
         timg0.timer0,
         esp_hal::rng::Rng::new(peripherals.RNG),
-        peripherals.RADIO_CLK,
+        peripherals.RADIO_CLK
     )
     .unwrap();
-
+    
     let delay = Delay::new();
     loop {
         info!("Hello world!");
@@ -38,3 +38,11 @@ fn main() -> ! {
     // for inspiration have a look at the examples at https://github.com/esp-rs/esp-hal/tree/v0.22.0/examples/src/bin
 
 }
+
+/* #[panic_handler]
+fn panic_handler(info: &core::panic::PanicInfo) -> ! {
+    error!("panic!");
+    loop {
+    
+    }
+} */

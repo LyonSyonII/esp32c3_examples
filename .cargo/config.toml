@@ -1,5 +1,12 @@
 [target.riscv32imc-unknown-none-elf]
-runner = "probe-rs run --chip=esp32c3"
+runner = [
+  "probe-rs",
+  "run",
+  "--chip",
+  "esp32c3",
+  "--log-format",
+  "{{{L}%bold} {f}:{l}}{s:severity}",
+]
 
 [env]
 DEFMT_LOG="info"

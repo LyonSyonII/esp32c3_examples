@@ -16,6 +16,10 @@
           lld
           sccache
           pkg-config
+      
+          cargo-espflash
+          cargo-binutils
+          probe-rs
       ];
       components = [
           "rustc"
@@ -37,7 +41,7 @@
         nativeBuildInputs = with pkgs; [
           nightly
           # stable
-          fenix.targets.x86_64-unknown-linux-gnu.latest.rust-std
+          fenix.targets.riscv32imc-unknown-none-elf.latest.rust-std
 
           rustup
         ] ++ buildDependencies;
@@ -46,8 +50,6 @@
 
         RUST_SRC_PATH = "${pkgs.fenix.complete.rust-src}/lib/rustlib/src/rust/library";
         RUSTC_WRAPPER = "sccache";
-        RUSTFLAGS = "-Ctarget-cpu=native -Clink-arg=-fuse-ld=mold";
-        MSRVFLAGS = "-Clink-arg=-fuse-ld=mold"; # RUSTFLAGS=$MSRVFLAGS cargo msrv
 
         LD_LIBRARY_PATH = with pkgs; lib.makeLibraryPath nativeBuildInputs;
       };

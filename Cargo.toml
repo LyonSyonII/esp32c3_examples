@@ -1,5 +1,5 @@
 [package]
-name = "esp32c3-test"
+name = "esp32c3-examples"
 version = "0.1.0"
 edition = "2021"
 
@@ -10,16 +10,11 @@ esp-backtrace = { version = "0.14.2", features = [
     "panic-handler",
     "defmt",
 ]}
-
 esp-hal = { version = "0.22.0", features = [
     "esp32c3",
     "defmt",
 ] }
-esp-alloc = { version = "0.5.0" }
-embedded-io = "0.6.1"
-
-
-esp-wifi = { version = "0.11.0", default-features=false, features = [
+esp-wifi = { version = "0.11.0", default-features = false, features = [
     "esp32c3",
     "utils",
     "wifi",
@@ -40,10 +35,20 @@ smoltcp = { version = "0.11.0", default-features = false, features = [
     "socket-tcp",
     "socket-udp",
 ] }
- bleps = { git = "https://github.com/bjoernQ/bleps", package = "bleps", rev = "a5148d8ae679e021b78f53fd33afb8bb35d0b62e", features = [ "macros", "async"] }
+bleps = { git = "https://github.com/bjoernQ/bleps", package = "bleps", rev = "a5148d8ae679e021b78f53fd33afb8bb35d0b62e", features = [ "macros", "async"] }
+blocking-network-stack = { git = "https://github.com/bjoernQ/blocking-network-stack.git", rev = "1c581661d78e0cf0f17b936297179b993fb149d7", features = ["defmt", "ipv4", "tcp"], default-features = false }
+
 defmt            = "0.3.8"
 defmt-rtt        = "0.4.1"
 critical-section = "1.2.0"
+esp-alloc        = "0.5.0"
+embedded-io      = "0.6.1"
+
+[profile.dev.package.esp-wifi]
+opt-level = 3
+
+[profile.dev.package.esp-hal]
+opt-level = 3
 
 [profile.dev]
 # Rust debug is too slow.
