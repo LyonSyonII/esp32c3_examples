@@ -92,17 +92,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "blocking-network-stack"
-version = "0.1.0"
-source = "git+https://github.com/bjoernQ/blocking-network-stack.git?rev=1c581661d78e0cf0f17b936297179b993fb149d7#1c581661d78e0cf0f17b936297179b993fb149d7"
-dependencies = [
- "defmt",
- "embedded-io",
- "heapless",
- "smoltcp",
-]
-
-[[package]]
 name = "bt-hci"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -271,12 +260,6 @@ checksum = "1f878075b9794c1e4ac788c95b728f26aa6366d32eeb10c7051389f898f7d067"
 dependencies = [
  "defmt",
 ]
-
-[[package]]
-name = "embassy-net-driver"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "524eb3c489760508f71360112bca70f6e53173e6fe48fc5f0efd0f5ab217751d"
 
 [[package]]
 name = "embassy-sync"
@@ -600,11 +583,9 @@ dependencies = [
  "critical-section",
  "defmt",
  "document-features",
- "embassy-net-driver",
  "embassy-sync",
  "embedded-io",
  "embedded-io-async",
- "enumset",
  "esp-alloc",
  "esp-build",
  "esp-config",
@@ -670,7 +651,6 @@ name = "esp32c3-examples"
 version = "0.1.0"
 dependencies = [
  "bleps",
- "blocking-network-stack",
  "critical-section",
  "defmt",
  "defmt-rtt",
@@ -680,7 +660,6 @@ dependencies = [
  "esp-hal",
  "esp-wifi",
  "heapless",
- "smoltcp",
 ]
 
 [[package]]

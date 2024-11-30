@@ -17,34 +17,21 @@ esp-hal = { version = "0.22.0", features = [
 ] }
 esp-wifi = { version = "0.11.0", default-features = false, features = [
     "esp32c3",
-    "utils",
-    "wifi",
+    # "utils",  # smoltcp
+    # "wifi",   # smoltcp
     "ble",
     "coex",
     "esp-alloc",
     "defmt",
 ] }
 heapless = { version = "0.8.0", default-features = false }
-smoltcp = { version = "0.11.0", default-features = false, features = [
-    "medium-ethernet",
-    "proto-dhcpv4",
-    "proto-igmp",
-    "proto-ipv4",
-    "socket-dhcpv4",
-    "socket-icmp",
-    "socket-raw",
-    "socket-tcp",
-    "socket-udp",
-] }
 bleps = { path = "./bleps/bleps", features = [ "macros", "async", "defmt"] }
-blocking-network-stack = { git = "https://github.com/bjoernQ/blocking-network-stack.git", rev = "1c581661d78e0cf0f17b936297179b993fb149d7", features = ["defmt", "ipv4", "tcp"], default-features = false }
 
 defmt            = "0.3.8"
 defmt-rtt        = "0.4.1"
 critical-section = "1.2.0"
 esp-alloc        = "0.5.0"
 embedded-io      = "0.6.1"
-esp32c3-hal = "0.15.1"
 
 [profile.dev.package.esp-wifi]
 opt-level = 3
