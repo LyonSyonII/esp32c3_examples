@@ -12,36 +12,36 @@
 
 use bleps::{
     ad_structure::{
-        create_advertising_data,
-        AdStructure,
-        BR_EDR_NOT_SUPPORTED,
-        LE_GENERAL_DISCOVERABLE,
+        create_advertising_data, AdStructure, BR_EDR_NOT_SUPPORTED, LE_GENERAL_DISCOVERABLE,
     },
     attribute_server::{AttributeServer, NotificationData, WorkResult},
-    gatt,
-    Ble,
-    HciConnector,
+    gatt, Ble, HciConnector,
 };
 use esp_alloc as _;
 use esp_backtrace as _;
 use esp_hal::{
     gpio::{Input, Pull},
+    interrupt::InterruptHandler,
     prelude::*,
     rng::Rng,
-    timer::timg::TimerGroup,
+    timer::{
+        systimer::{Alarm, FrozenUnit, SystemTimer},
+        timg::TimerGroup,
+    },
 };
 use esp_wifi::{ble::controller::BleConnector, init};
 
-use defmt_rtt as _;
 use defmt::{error, info, warn};
+use defmt_rtt as _;
 use heapless::String;
 
 #[entry]
 fn main() -> ! {
     // SAFETY: Workaround for rust-analyzer to correctly see esp32c3::Peripherals, they are the same type
     #[allow(clippy::useless_transmute)]
-    let peripherals: esp_hal::peripherals::Peripherals = unsafe { core::mem::transmute(esp_hal::init(esp_hal::Config::default())) };
-    
+    let peripherals: esp_hal::peripherals::Peripherals =
+        unsafe { core::mem::transmute(esp_hal::init(esp_hal::Config::default())) };
+
     esp_alloc::heap_allocator!(72 * 1024);
 
     let timg0 = TimerGroup::new(peripherals.TIMG0);
@@ -53,18 +53,49 @@ fn main() -> ! {
     )
     .unwrap();
 
+    let mut systimer = esp_hal::timer::systimer::SystemTimer::new(peripherals.SYSTIMER);
+    let frozen_unit = FrozenUnit::new(&mut systimer.unit0);
+    let target_alarm = Alarm::new(systimer.comparator0, &frozen_unit);
+
+    let ticks_per_second = SystemTimer::ticks_per_second();
+    let now = || SystemTimer::now();
+    info!("Time is: {}; Ticks per second: {}", now(), ticks_per_second);
+
+    target_alarm.set_target(now() + ticks_per_second);
+    target_alarm.enable_interrupt(true);
+    // target_alarm.set_interrupt_handler(InterruptHandler::new(alarm_handler, esp_hal::interrupt::Priority::min()));
+
     let mut bluetooth = peripherals.BT;
+    let mut seconds = 0;
     loop {
-        start_ble(&init, &mut bluetooth);
+        ble_server(&init, &mut bluetooth, || {
+            if target_alarm.is_interrupt_set() {
+                seconds += 1;
+                info!(
+                    "Interrupt time: {}\tSystem time: {}",
+                    seconds,
+                    now() / ticks_per_second
+                );
+                target_alarm.enable_interrupt(false);
+                target_alarm.clear_interrupt();
+
+                target_alarm.set_target(now() + ticks_per_second);
+                target_alarm.enable_interrupt(true);
+            }
+        });
     }
 }
 
-fn start_ble(init: &esp_wifi::EspWifiController<'_>, bluetooth: &mut impl esp_hal::peripheral::Peripheral<P = esp_hal::peripherals::BT>) {
+fn ble_server(
+    init: &esp_wifi::EspWifiController<'_>,
+    bluetooth: &mut impl esp_hal::peripheral::Peripheral<P = esp_hal::peripherals::BT>,
+    mut loop_callback: impl FnMut(),
+) {
     let now = || esp_hal::time::now().duration_since_epoch().to_millis();
     let connector = BleConnector::new(init, bluetooth);
     let hci = HciConnector::new(connector, now);
     let mut ble = Ble::new(&hci);
-    
+
     ble.init().unwrap();
     ble.cmd_set_le_advertising_parameters().unwrap();
     ble.cmd_set_le_advertising_data(
@@ -73,22 +104,27 @@ fn start_ble(init: &esp_wifi::EspWifiController<'_>, bluetooth: &mut impl esp_ha
             AdStructure::ServiceUuids16(&[Uuid::Uuid16(0x1809)]),
             AdStructure::CompleteLocalName(esp_hal::chip!()),
         ])
-        .unwrap()
-    ).unwrap();
+        .unwrap(),
+    )
+    .unwrap();
     ble.cmd_set_le_advertise_enable(true).unwrap();
-    
+
     info!("BLE: started advertising");
-    
+
     const LEN: usize = 300;
-    let name = core::cell::RefCell::<heapless::String::<LEN>>::new(heapless::String::new());
-    
+    let name = core::cell::RefCell::<heapless::String<LEN>>::new(heapless::String::new());
+
     let mut rf = |offset: usize, data: &mut [u8]| {
         use core::fmt::Write as _;
-        
+
         let name = name.borrow();
         let mut s = String::<LEN>::new();
         if name.is_empty() {
-            write!(&mut s, "Hello, send your name please 123456789 123456789 123456789 123456789").unwrap();
+            write!(
+                &mut s,
+                "Hello, send your name please 123456789 123456789 123456789 123456789"
+            )
+            .unwrap();
         } else {
             write!(&mut s, "Hello {name}!").unwrap();
         }
@@ -101,15 +137,15 @@ fn start_ble(init: &esp_wifi::EspWifiController<'_>, bluetooth: &mut impl esp_ha
             info!("SNT: {} bytes\tREM: {:?}", offset, s.len());
         }
         data[..s.len()].copy_from_slice(s.as_bytes());
-        
+
         s.len()
     };
     let mut wf = |offset: usize, data: &[u8]| {
         let Ok(v) = heapless::Vec::<u8, LEN>::from_slice(data) else {
-            return warn!("RECEIVED DATA WITH LENGTH {}", data.len());
+            return error!("RECEIVED DATA WITH LENGTH {}", data.len());
         };
         let Ok(s) = heapless::String::from_utf8(v) else {
-            return warn!("RECEIVED DATA IS NOT UTF8");
+            return error!("RECEIVED DATA IS NOT UTF8");
         };
         let mut name = name.borrow_mut();
         name.clear();
@@ -117,23 +153,23 @@ fn start_ble(init: &esp_wifi::EspWifiController<'_>, bluetooth: &mut impl esp_ha
 
         info!("RECEIVED NAME: {} {:?}", offset, s);
     };
-    
+
     gatt!([service {
         uuid: "937312e0-2354-11eb-9f10-fbc30a62cf38",
-        characteristics: [
-            characteristic {
-                name: "readwrite",
-                uuid: "937312e0-2354-11eb-9f10-fbc30a62cf38",
-                read: rf,
-                write: wf,
-            }
-        ]
+        characteristics: [characteristic {
+            name: "readwrite",
+            uuid: "937312e0-2354-11eb-9f10-fbc30a62cf38",
+            read: rf,
+            write: wf,
+        }]
     }]);
 
     let mut rng = bleps::no_rng::NoRng;
     let mut srv = AttributeServer::new(&mut ble, &mut gatt_attributes, &mut rng);
-    
+
     loop {
+        loop_callback();
+
         match srv.do_work() {
             Ok(res) => {
                 if let WorkResult::GotDisconnected = res {
