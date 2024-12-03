@@ -32,6 +32,7 @@ defmt-rtt        = "0.4.1"
 critical-section = "1.2.0"
 esp-alloc        = "0.5.0"
 embedded-io      = "0.6.1"
+fugit = { version = "0.3.7", features = ["defmt"] }
 
 [profile.dev.package.esp-wifi]
 opt-level = 3

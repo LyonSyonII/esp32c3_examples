@@ -1,14 +1,10 @@
-//! BLE Example
-//!
-//! - starts Bluetooth advertising
-//! - offers one service with three characteristics (one is read/write, one is write only, one is read/write/notify)
-//! - pressing the boot-button on a dev-board will send a notification if it is subscribed
-
-//% FEATURES: esp-wifi esp-wifi/ble
-//% CHIPS: esp32 esp32s3 esp32c2 esp32c3 esp32c6 esp32h2
-
 #![no_std]
 #![no_main]
+
+use core::{
+    borrow::BorrowMut,
+    cell::{Cell, RefCell},
+};
 
 use bleps::{
     ad_structure::{
@@ -17,6 +13,7 @@ use bleps::{
     attribute_server::{AttributeServer, NotificationData, WorkResult},
     gatt, Ble, HciConnector,
 };
+use critical_section::Mutex;
 use esp_alloc as _;
 use esp_backtrace as _;
 use esp_hal::{
@@ -25,17 +22,19 @@ use esp_hal::{
     prelude::*,
     rng::Rng,
     timer::{
-        systimer::{self, Alarm, FrozenUnit, SysTimerAlarms, SystemTimer, Target},
+        systimer::{self, Alarm, FrozenUnit, Periodic, SysTimerAlarms, SystemTimer, Target},
         timg::TimerGroup,
     },
 };
 use esp_wifi::{ble::controller::BleConnector, init};
 
-use defmt::{error, info, warn};
+use defmt::{error, info, trace, warn};
 use defmt_rtt as _;
 use heapless::String;
 
-static mut ALARM0: Option<Alarm<'_, Target, esp_hal::Blocking, systimer::SpecificComparator<'_, 0>, systimer::SpecificUnit<'_, 0>>> = None;
+static ALARM0: critical_section::Mutex<
+    RefCell<Option<(Alarm<'_, systimer::Target, esp_hal::Blocking>, u64)>>,
+> = critical_section::Mutex::new(RefCell::new(None));
 
 #[entry]
 fn main() -> ! {
@@ -45,7 +44,7 @@ fn main() -> ! {
         unsafe { core::mem::transmute(esp_hal::init(esp_hal::Config::default())) };
 
     esp_alloc::heap_allocator!(72 * 1024);
-
+    
     let timg0 = TimerGroup::new(peripherals.TIMG0);
 
     let init = init(
@@ -54,43 +53,77 @@ fn main() -> ! {
         peripherals.RADIO_CLK,
     )
     .unwrap();
-
-    let mut systimer = systimer::SystemTimer::new(peripherals.SYSTIMER);
-    let frozen_unit = FrozenUnit::new(&mut systimer.unit0);
-    let target_alarm = Alarm::new(systimer.comparator0, &frozen_unit);
-
-    let ticks_per_second = SystemTimer::ticks_per_second();
-    let now = || SystemTimer::now();
-    info!("Time is: {}; Ticks per second: {}", now(), ticks_per_second);
-
-    target_alarm.set_target(now() + ticks_per_second);
-    target_alarm.enable_interrupt(true);
-    // target_alarm.set_interrupt_handler(InterruptHandler::new(alarm_handler, esp_hal::interrupt::Priority::min()));
+    
+    let systimer = systimer::SystemTimer::new(peripherals.SYSTIMER).split();
+    critical_section::with(|cs| {
+        let alarm = systimer.alarm0.into_target(); // oneshot alarm
+        alarm.enable_interrupt(false);
+        alarm.set_interrupt_handler(alarm_handler);
+        alarm.set_target(0);
+        ALARM0.replace(cs, Some((alarm, 0)))
+    });
 
     let mut bluetooth = peripherals.BT;
-    let mut seconds = 0;
     loop {
-        if target_alarm.is_interrupt_set() {
-            seconds += 1;
-            info!(
-                "Interrupt time: {}\tSystem time: {}",
-                seconds,
-                now() / ticks_per_second
-            );
-            target_alarm.enable_interrupt(false);
-            target_alarm.clear_interrupt();
-
-            target_alarm.set_target(now() + ticks_per_second);
-            target_alarm.enable_interrupt(true);
-        }
-        // ble_server(&init, &mut bluetooth, || {});
+        ble_server(&init, &mut bluetooth);
     }
 }
 
-fn ble_server(
-    init: &esp_wifi::EspWifiController<'_>,
-    bluetooth: &mut impl esp_hal::peripheral::Peripheral<P = esp_hal::peripherals::BT>,
-    mut loop_callback: impl FnMut(),
+#[handler(priority = esp_hal::interrupt::Priority::max())]
+#[ram]
+fn alarm_handler() {
+    critical_section::with(|cs| {
+        info!("[Alarm Interrupt] BEEP BEEP BEEP");
+        let mut alarm_cell = ALARM0.borrow_ref_mut(cs);
+        let Some((alarm, _)) = alarm_cell.as_mut() else {
+            return;
+        };
+        alarm.enable_interrupt(false);
+        alarm.clear_interrupt();
+    });
+}
+
+fn ble_receive_write(_offset: usize, data: &[u8]) {
+    info!("[BLE-Write] Received data\t{}", data);
+    if data.len() != 4 {
+        error!("[BLE-Write] Received data with a len of {}", data.len());
+        return;
+    }
+    
+    let secs = u32::from_be_bytes(unsafe { data.try_into().unwrap_unchecked() }) as u64;
+    critical_section::with(|cs| {
+        info!("Inside critical");
+        let mut alarm_cell = ALARM0.borrow_ref_mut(cs);
+        let Some((alarm, target)) = alarm_cell.as_mut() else {
+            return
+        };
+        *target = SystemTimer::now() + secs * SystemTimer::ticks_per_second();
+        alarm.set_target(*target);
+        alarm.enable_interrupt(true);
+        info!("Outside critical");
+    });
+    info!("[BLE-Write] Set alarm for \t{}\tseconds", secs);
+}
+
+fn ble_receive_read(_offset: usize, data: &mut [u8]) -> usize {
+    let Some(mut remaining) = critical_section::with(|cs| {
+        ALARM0
+            .borrow_ref(cs)
+            .as_ref()
+            .map(|(alarm, target)| target.saturating_sub(alarm.now().ticks()))
+    }) else {
+        return 0;
+    };
+    remaining /= SystemTimer::ticks_per_second();
+
+    info!("[BLE-Read] Remaining\t{}\tseconds", remaining);
+    data[..4].copy_from_slice(&(remaining as u32).to_be_bytes());
+    4
+}
+
+fn ble_server<'a>(
+    init: &'a esp_wifi::EspWifiController<'_>,
+    bluetooth: &'a mut impl esp_hal::peripheral::Peripheral<P = esp_hal::peripherals::BT>,
 ) {
     let now = || esp_hal::time::now().duration_since_epoch().to_millis();
     let connector = BleConnector::new(init, bluetooth);
@@ -104,7 +137,6 @@ fn ble_server(
             AdStructure::Flags(LE_GENERAL_DISCOVERABLE | BR_EDR_NOT_SUPPORTED),
             AdStructure::ServiceUuids16(&[Uuid::Uuid16(0x1809)]),
             AdStructure::CompleteLocalName(esp_hal::chip!()),
-            AdStructure::ShortenedLocalName("esp32"),
         ])
         .unwrap(),
     )
@@ -113,56 +145,13 @@ fn ble_server(
 
     info!("BLE: started advertising");
 
-    const LEN: usize = 300;
-    let name = core::cell::RefCell::<heapless::String<LEN>>::new(heapless::String::new());
-
-    let mut rf = |offset: usize, data: &mut [u8]| {
-        use core::fmt::Write as _;
-
-        let name = name.borrow();
-        let mut s = String::<LEN>::new();
-        if name.is_empty() {
-            write!(
-                &mut s,
-                "Hello, send your name please 123456789 123456789 123456789 123456789"
-            )
-            .unwrap();
-        } else {
-            write!(&mut s, "Hello {name}!").unwrap();
-        }
-
-        let s = &s[offset..];
-        if offset == 0 {
-            info!("## START OF MESSAGE ##");
-            info!("MSG: {} bytes\tTXT: {:?}", s.len(), s);
-        } else {
-            info!("SNT: {} bytes\tREM: {:?}", offset, s.len());
-        }
-        data[..s.len()].copy_from_slice(s.as_bytes());
-
-        s.len()
-    };
-    let mut wf = |offset: usize, data: &[u8]| {
-        let Ok(v) = heapless::Vec::<u8, LEN>::from_slice(data) else {
-            return error!("RECEIVED DATA WITH LENGTH {}", data.len());
-        };
-        let Ok(s) = heapless::String::from_utf8(v) else {
-            return error!("RECEIVED DATA IS NOT UTF8");
-        };
-        let mut name = name.borrow_mut();
-        name.clear();
-        name.push_str(&s).unwrap();
-
-        info!("RECEIVED NAME: {} {:?}", offset, s);
-    };
-
     gatt!([service {
         uuid: "937312e0-2354-11eb-9f10-fbc30a62cf38",
         characteristics: [characteristic {
             name: "readwrite",
             uuid: "937312e0-2354-11eb-9f10-fbc30a62cf38",
-            read: rf,
-            write: wf,
+            read: ble_receive_read,
+            write: ble_receive_write,
         }]
     }]);
 
@@ -170,7 +159,7 @@ fn ble_server(
     let mut srv = AttributeServer::new(&mut ble, &mut gatt_attributes, &mut rng);
 
     loop {
-        loop_callback();
+        trace!("Calling main loop");
 
         match srv.do_work() {
             Ok(res) => {

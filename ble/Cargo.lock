@@ -659,6 +659,7 @@ dependencies = [
  "esp-backtrace",
  "esp-hal",
  "esp-wifi",
+ "fugit",
  "heapless",
 ]
 
