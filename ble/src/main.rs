@@ -25,7 +25,7 @@ use esp_hal::{
     prelude::*,
     rng::Rng,
     timer::{
-        systimer::{Alarm, FrozenUnit, SystemTimer},
+        systimer::{self, Alarm, FrozenUnit, SysTimerAlarms, SystemTimer, Target},
         timg::TimerGroup,
     },
 };
@@ -34,6 +34,8 @@ use esp_wifi::{ble::controller::BleConnector, init};
 use defmt::{error, info, warn};
 use defmt_rtt as _;
 use heapless::String;
+
+static mut ALARM0: Option<Alarm<'_, Target, esp_hal::Blocking, systimer::SpecificComparator<'_, 0>, systimer::SpecificUnit<'_, 0>>> = None;
 
 #[entry]
 fn main() -> ! {
@@ -53,7 +55,7 @@ fn main() -> ! {
     )
     .unwrap();
 
-    let mut systimer = esp_hal::timer::systimer::SystemTimer::new(peripherals.SYSTIMER);
+    let mut systimer = systimer::SystemTimer::new(peripherals.SYSTIMER);
     let frozen_unit = FrozenUnit::new(&mut systimer.unit0);
     let target_alarm = Alarm::new(systimer.comparator0, &frozen_unit);
 
@@ -68,21 +70,20 @@ fn main() -> ! {
     let mut bluetooth = peripherals.BT;
     let mut seconds = 0;
     loop {
-        ble_server(&init, &mut bluetooth, || {
-            if target_alarm.is_interrupt_set() {
-                seconds += 1;
-                info!(
-                    "Interrupt time: {}\tSystem time: {}",
-                    seconds,
-                    now() / ticks_per_second
-                );
-                target_alarm.enable_interrupt(false);
-                target_alarm.clear_interrupt();
+        if target_alarm.is_interrupt_set() {
+            seconds += 1;
+            info!(
+                "Interrupt time: {}\tSystem time: {}",
+                seconds,
+                now() / ticks_per_second
+            );
+            target_alarm.enable_interrupt(false);
+            target_alarm.clear_interrupt();
 
-                target_alarm.set_target(now() + ticks_per_second);
-                target_alarm.enable_interrupt(true);
-            }
-        });
+            target_alarm.set_target(now() + ticks_per_second);
+            target_alarm.enable_interrupt(true);
+        }
+        // ble_server(&init, &mut bluetooth, || {});
     }
 }
 
@@ -103,6 +104,7 @@ fn ble_server(
             AdStructure::Flags(LE_GENERAL_DISCOVERABLE | BR_EDR_NOT_SUPPORTED),
             AdStructure::ServiceUuids16(&[Uuid::Uuid16(0x1809)]),
             AdStructure::CompleteLocalName(esp_hal::chip!()),
+            AdStructure::ShortenedLocalName("esp32"),
         ])
         .unwrap(),
     )
