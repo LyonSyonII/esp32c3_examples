@@ -44,7 +44,7 @@ fn main() -> ! {
         unsafe { core::mem::transmute(esp_hal::init(esp_hal::Config::default())) };
 
     esp_alloc::heap_allocator!(72 * 1024);
-    
+
     let timg0 = TimerGroup::new(peripherals.TIMG0);
 
     let init = init(
@@ -53,7 +53,7 @@ fn main() -> ! {
         peripherals.RADIO_CLK,
     )
     .unwrap();
-    
+
     let systimer = systimer::SystemTimer::new(peripherals.SYSTIMER).split();
     critical_section::with(|cs| {
         let alarm = systimer.alarm0.into_target(); // oneshot alarm
@@ -65,7 +65,7 @@ fn main() -> ! {
 
     let mut bluetooth = peripherals.BT;
     loop {
-        ble_server(&init, &mut bluetooth);
+        // ble_server(&init, &mut bluetooth);
     }
 }
 
@@ -89,13 +89,13 @@ fn ble_receive_write(_offset: usize, data: &[u8]) {
         error!("[BLE-Write] Received data with a len of {}", data.len());
         return;
     }
-    
+
     let secs = u32::from_be_bytes(unsafe { data.try_into().unwrap_unchecked() }) as u64;
     critical_section::with(|cs| {
         info!("Inside critical");
         let mut alarm_cell = ALARM0.borrow_ref_mut(cs);
         let Some((alarm, target)) = alarm_cell.as_mut() else {
-            return
+            return;
         };
         *target = SystemTimer::now() + secs * SystemTimer::ticks_per_second();
         alarm.set_target(*target);
