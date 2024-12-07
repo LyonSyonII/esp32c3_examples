@@ -505,7 +505,7 @@ dependencies = [
  "esp-riscv-rt",
  "esp32",
  "esp32c2",
- "esp32c3",
+ "esp32c3 0.26.0",
  "esp32c6",
  "esp32h2",
  "esp32s2",
@@ -637,17 +637,6 @@ dependencies = [
 
 [[package]]
 name = "esp32c3"
-version = "0.26.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d1750382dc49fa333ee6b1ba96f8c540038b9666f5a233dc1221c98e3236118"
-dependencies = [
- "critical-section",
- "defmt",
- "vcell",
-]
-
-[[package]]
-name = "esp32c3-examples"
 version = "0.1.0"
 dependencies = [
  "bleps",
@@ -661,6 +650,17 @@ dependencies = [
  "esp-wifi",
  "fugit",
  "heapless",
+]
+
+[[package]]
+name = "esp32c3"
+version = "0.26.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d1750382dc49fa333ee6b1ba96f8c540038b9666f5a233dc1221c98e3236118"
+dependencies = [
+ "critical-section",
+ "defmt",
+ "vcell",
 ]
 
 [[package]]

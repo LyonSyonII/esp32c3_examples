@@ -1,5 +1,6 @@
 [package]
-name = "esp32c3-examples"
+name = "esp32c3"
+description = "Examples for the esp32c3 microcontroller (probably work with other chips as well"
 version = "0.1.0"
 edition = "2021"
 

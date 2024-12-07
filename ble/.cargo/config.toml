@@ -6,6 +6,8 @@ runner = [
   "esp32c3",
   "--log-format",
   "{{{L}%bold} {f}:{l}}{s:severity}",
+  # "--probe",
+  # "303a:1001:64:E8:33:87:D3:B4"
 ]
 
 [env]

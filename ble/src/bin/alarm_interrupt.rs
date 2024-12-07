@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 
-use core::{cell::{Cell, RefCell}, ops::AddAssign};
+use core::{cell::RefCell, ops::AddAssign};
 
 use critical_section::Mutex;
 use esp_alloc as _;
@@ -11,7 +11,7 @@ use esp_hal::{
     timer::systimer::{self, Alarm, SystemTimer},
 };
 
-use defmt::info;
+use defmt::{info, warn};
 use defmt_rtt as _;
 
 #[entry]
@@ -30,7 +30,7 @@ fn main() -> ! {
     let systimer = systimer::SystemTimer::new(peripherals.SYSTIMER).split();
     let ticks_per_second = SystemTimer::ticks_per_second();
     let target_alarm = systimer.alarm0.into_target();
-    
+
     target_alarm.set_target(SystemTimer::now() + ticks_per_second);
     target_alarm.set_interrupt_handler(alarm_handler);
     target_alarm.enable_interrupt(true);
@@ -47,12 +47,14 @@ fn main() -> ! {
 }
 
 static SECONDS: Mutex<RefCell<u64>> = Mutex::new(RefCell::new(1));
-static ALARM0: Mutex<RefCell<Option<Alarm<'_, systimer::Target, esp_hal::Blocking>>>> = Mutex::new(RefCell::new(None));
+static ALARM0: Mutex<RefCell<Option<Alarm<'_, systimer::Target, esp_hal::Blocking>>>> =
+    Mutex::new(RefCell::new(None));
 
 #[handler(priority = esp_hal::interrupt::Priority::max())]
 #[ram]
 fn alarm_handler() {
     info!("[Alarm] BEEP BEEP\n");
+    let start = esp_hal::time::Duration::from_ticks(SystemTimer::now());
     critical_section::with(|cs| {
         let mut target_alarm = ALARM0.borrow_ref_mut(cs);
         let Some(target_alarm) = target_alarm.as_mut() else {
@@ -64,4 +66,6 @@ fn alarm_handler() {
         target_alarm.set_target(SystemTimer::now() + SystemTimer::ticks_per_second() * *seconds);
         target_alarm.clear_interrupt();
     });
+    let end = esp_hal::time::Duration::from_ticks(SystemTimer::now());
+    warn!("Alarm handler took: {}", end - start);
 }

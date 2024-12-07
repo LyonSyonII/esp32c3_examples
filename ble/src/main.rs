@@ -32,9 +32,12 @@ use defmt::{error, info, trace, warn};
 use defmt_rtt as _;
 use heapless::String;
 
-static ALARM0: critical_section::Mutex<
-    RefCell<Option<(Alarm<'_, systimer::Target, esp_hal::Blocking>, u64)>>,
-> = critical_section::Mutex::new(RefCell::new(None));
+type Alarm0 = Alarm<'static, systimer::Target, esp_hal::Blocking>;
+/* static ALARM0: critical_section::Mutex<RefCell<Option<(Alarm0, u64)>>> =
+critical_section::Mutex::new(RefCell::new(None)); */
+
+static ALARM0: critical_section::Mutex<RefCell<Option<(Alarm0, u64)>>> =
+    critical_section::Mutex::new(RefCell::new(None));
 
 #[entry]
 fn main() -> ! {
@@ -65,7 +68,7 @@ fn main() -> ! {
 
     let mut bluetooth = peripherals.BT;
     loop {
-        // ble_server(&init, &mut bluetooth);
+        ble_server(&init, &mut bluetooth);
     }
 }
 
@@ -159,7 +162,7 @@ fn ble_server<'a>(
     let mut srv = AttributeServer::new(&mut ble, &mut gatt_attributes, &mut rng);
 
     loop {
-        trace!("Calling main loop");
+        info!("[BLE] Calling main loop");
 
         match srv.do_work() {
             Ok(res) => {
